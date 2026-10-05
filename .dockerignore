@@ -1,0 +1,10 @@
+.git
+.gitignore
+.vscode
+Dockerfile
+.dockerignore
+Jenkinsfile
+*.pem
+*.key
+.env
+.env.*

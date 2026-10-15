@@ -11,11 +11,10 @@ pipeline {
         EC2_USER       = 'ec2-user'
         SSH_CREDENTIAL = 'aws-ec2-ssh'
 
-        IMAGE_NAME     = 'myapp'
-        CONTAINER_NAME = 'myapp'
-
-        HOST_PORT      = '8080'
-        CONTAINER_PORT = '8080'
+        IMAGE_NAME     = 'rahman-one'
+        CONTAINER_NAME = 'rahman-one'
+        HOST_PORT      = '80'
+        CONTAINER_PORT = '80'
     }
 
     stages {
@@ -28,12 +27,8 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 sh '''
-                    docker build \
-                        -t ${IMAGE_NAME}:${BUILD_NUMBER} .
-
-                    docker save \
-                        -o image.tar \
-                        ${IMAGE_NAME}:${BUILD_NUMBER}
+                    docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} .
+                    docker save -o image.tar ${IMAGE_NAME}:${BUILD_NUMBER}
                 '''
             }
         }
@@ -51,7 +46,7 @@ pipeline {
             }
         }
 
-        stage('Transfer Image to EC2') {
+        stage('Transfer Image') {
             steps {
                 sshagent(credentials: ["${SSH_CREDENTIAL}"]) {
                     sh '''
@@ -64,21 +59,21 @@ pipeline {
             }
         }
 
-        stage('Deploy on EC2') {
+        stage('Deploy NGINX Website') {
             steps {
                 sshagent(credentials: ["${SSH_CREDENTIAL}"]) {
                     sh '''
                         ssh -o BatchMode=yes \
                             -o StrictHostKeyChecking=yes \
-                            ${EC2_USER}@${EC2_HOST} "
+                            ${EC2_USER}@${EC2_HOST} '
                                 sudo docker load -i /tmp/image.tar &&
-                                (sudo docker rm -f ${CONTAINER_NAME} || true) &&
+                                (sudo docker rm -f rahman-one || true) &&
                                 sudo docker run -d \
-                                    --name ${CONTAINER_NAME} \
+                                    --name rahman-one \
                                     --restart unless-stopped \
-                                    -p ${HOST_PORT}:${CONTAINER_PORT} \
-                                    ${IMAGE_NAME}:${BUILD_NUMBER}
-                            "
+                                    -p 80:80 \
+                                    rahman-one:'"${BUILD_NUMBER}"'
+                            '
                     '''
                 }
             }
@@ -90,10 +85,9 @@ pipeline {
                     sh '''
                         ssh -o BatchMode=yes \
                             -o StrictHostKeyChecking=yes \
-                            ${EC2_USER}@${EC2_HOST} "
-                                sudo docker ps \
-                                    --filter name=${CONTAINER_NAME}
-                            "
+                            ${EC2_USER}@${EC2_HOST} \
+                            "sudo docker ps --filter name=rahman-one &&
+                             curl -I http://localhost"
                     '''
                 }
             }
@@ -104,13 +98,11 @@ pipeline {
         always {
             sh 'rm -f image.tar'
         }
-
         success {
-            echo 'Deployment completed successfully.'
+            echo 'NGINX website deployed successfully!'
         }
-
         failure {
-            echo 'Pipeline failed. Check the failed stage in Console Output.'
+            echo 'Deployment failed. Check the stage error in Console Output.'
         }
     }
 }
